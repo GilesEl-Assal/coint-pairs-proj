@@ -1,1 +1,1 @@
-# coint-pairs-proj
+# PairsCointProj
