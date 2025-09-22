@@ -24,7 +24,7 @@ class PairsTrade:
         # accounting
         self.initial_equity = 2.0 * self.capital_per_leg  # max capital allocated to both legs
         self.deployed_equity = 0.0
-        self.realized_pnl = 0.0    # PnL that has been realized (cash)
+        self.realized_pnl = 0.0
         self.prev_portfolio_value = self.initial_equity  # start value
         self.prev_unreal = 0.0
         self.daily_returns = []    # list of daily pct returns (period-to-period)
@@ -177,11 +177,6 @@ def backtest_pairs(zscore_dict, data, hedge_ratios, capital_per_leg=10000,
                             entry_threshold=entry, exit_threshold=exit, trade_cost_pct=trade_cost_pct)
         # iterate dates in zseries (chronological)
         for date in zseries.index:
-            if date not in data.index:
-                # If price missing, append a flat day to preserve alignment:
-                # Use previous portfolio value to compute zero daily return (no price movement)
-                # But simplest: skip date entirely to keep Series consistent with available prices
-                continue
             price_a = data.loc[date, pair[0]]
             price_b = data.loc[date, pair[1]]
             zscore = zseries.loc[date]

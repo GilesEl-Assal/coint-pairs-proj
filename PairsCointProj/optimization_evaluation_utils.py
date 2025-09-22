@@ -30,7 +30,7 @@ def diagnose_pair(spread_series, prices_df, pair, lookback=21, ddof=0, z_thresho
     sigma = r.std(ddof).shift(1)
     z = (spread_series - m) / sigma
 
-    print("=== SIGMA SUMMARY ===")
+    print(f"=== SIGMA SUMMARY {pair} ===")
     print(sigma.describe())
     print("count zeros in sigma:", int((sigma == 0).sum()))
     print("count tiny sigma (<1e-6):", int((sigma.abs() < 1e-6).sum()))

@@ -54,14 +54,7 @@ test_data  = data.loc[split_date+pd.Timedelta(days=1):]
 # Step 2: Find cointegrated pairs only on train_data
 coint_pairs_train = find_coint_pairs(train_data)
 ordered_pairs_train = vol_check(coint_pairs_train, train_data)
-'''
-for pair in coint_pairs_train[0]:
-    plt.plot(train_data[pair[0]],label=pair[0])
-    plt.plot(train_data[pair[1]],label=pair[1])
-    plt.title(f"Adj Close of {pair[0]} and {pair[1]}")
-    plt.legend()
-    plt.show()
-'''
+
 
 # Step 3: Calculate hedge ratios only on train_data
 hedge_ratios_train = hedge_ratio_dict(ordered_pairs_train, train_data)
@@ -71,9 +64,9 @@ flipped_ratios_train = recalc_flipped_hedge_ratios(hedge_ratios_train, train_dat
 # Step 4: Calculate spread and zscores only on full dataset
 spread_full = calc_spread(flipped_ratios_train, data)
 
-#SANITY CHECK
-for pair in spread_full:
-    z, sigma, spikes = diagnose_pair(spread_full[pair], train_data, pair, lookback=21)
+''' Checks the zscored spread dictionary to find outliers '''
+#for pair in spread_full:
+#    z, sigma, spikes = diagnose_pair(spread_full[pair], train_data, pair, lookback=21)
 
 
 
@@ -101,18 +94,13 @@ for pair in flipped_ratios_train.keys():
         zscore_pair = zscore_train[pair].dropna()
         data_pair = train_data[[pair[0], pair[1]]]
 
-        '''
-        plt.plot(zscore_train[pair], label=pair)
-        plt.title(f"Rolling zscores for {pair[0]} and {pair[1]} at {lookback}")
-        plt.legend()
-        plt.show()
-        '''
+
 
         for entry in entry_values:
             for exit in exit_values:
                 # Backtest one pair at a time
                 results = backtest_pairs({pair: zscore_pair}, data_pair, {pair: flipped_ratios_train[pair]},
-                                    capital_per_leg=10000, entry=entry, exit=exit,trade_cost_pct=0.0005)
+                                    capital_per_leg=10000, entry=entry, exit=exit,trade_cost_pct=0.005)
                 daily_returns = results[0]['daily_returns']
 
                 #mean_ret = np.mean(daily_returns)
@@ -149,7 +137,7 @@ for pair, (best_lookback, best_entry, best_exit) in best_params.items():
     zscore_pair = zscore_test[pair]
     data_pair = test_data[[pair[0], pair[1]]]
     results = backtest_pairs({pair: zscore_pair}, data_pair, {pair: flipped_ratios_train[pair]},
-                             capital_per_leg=10000, entry=best_entry, exit=best_exit,trade_cost_pct=0.0005)
+                             capital_per_leg=10000, entry=best_entry, exit=best_exit,trade_cost_pct=0.005)
     daily_returns = results[0]['daily_returns']
     mean_ret = np.mean(daily_returns)
     std_ret = np.std(daily_returns, ddof=1)
@@ -162,7 +150,7 @@ for pair, (best_lookback, best_entry, best_exit) in best_params.items():
         f"TEST RESULTS: {pair} Lookback={best_lookback}, Entry={best_params[pair][1]}, Exit={best_params[pair][2]} "
         f"-> Trades: {results[0]['num_trades']}, Mean: {mean_ret:.5f}, Std: {std_ret:.5f}, "
         f"Max: {max_ret:.5f}, Min: {min_ret:.5f}, Sharpe: {sharpe:.2f}")
-    #Equity curves
+    #Daily Return Graph
     for res in results:
         pair_name = res['pair']
         return_graph = res['daily_returns']
@@ -174,6 +162,7 @@ for pair, (best_lookback, best_entry, best_exit) in best_params.items():
         plt.ylabel("Daily Returns ")
         plt.legend()
         plt.show()
+    #Equity Curves
     for res in results:
         pair_name = res['pair']
         equity_curve = res['equity_curve']
@@ -187,7 +176,7 @@ for pair, (best_lookback, best_entry, best_exit) in best_params.items():
         plt.show()
 
 ''' LOG OF EVERY TRADE (ENTRY + EXIT DATES, NUMBER OF SHARES, AND NET PNL)'''
-'''
+
 for pair, (best_lookback, best_entry, best_exit) in best_params.items():
     #recompute z-score with the chosen lookback
     zscore_full = rolling_zscore(spread_full, best_lookback)
@@ -211,36 +200,8 @@ for pair, (best_lookback, best_entry, best_exit) in best_params.items():
                 f"Price A= {price_a:.2f}, Price B= {price_b:.2f} | Shares A= {shares_a:.2f}, Shares B = {shares_b:.2f}"
                 f" | Net Pnl = {net_pnl:.2f}")
 
-'''
-
-
-'''
-# Visualizations
-
-
-# Plot each spread
 
 
 
-    plt.plot(zscore_spread_df[pair], label=f"Spread: {pair[0]} - β·{pair[1]}")
-    plt.title(f"Spread for Pair {pair}")
-    plt.xlabel("Date")
-    plt.ylabel("Spread Value")
-    plt.axhline(zscore_spread_df[pair].mean(), color='black')
-    plt.axhline(1.0, color='red')
-    plt.axhline(-1.0, color='green')
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
-'''
 
 
-# If spread >-1 stock A is undervalued relative to stock B: long stock A and short stock B
-# If spread < 1 stock A is overvalued relative to stock B: short stock A and long stock B
-# When the spread reverts to mean (0) close the trade.
-
-# Plot all spread series
-#for pair, spread in spreadDict.items():
-#    spread.plot(title=str(pair))
-#    plt.show()
