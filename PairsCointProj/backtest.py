@@ -3,11 +3,10 @@ import pandas as pd
 from datetime import datetime
 
 class PairsTrade:
-    def __init__(self, pair, hedge_ratio, capital_per_leg=10000,
+    def __init__(self, pair, hedge_ratio, initial_equity,
                  entry_threshold=1.0, exit_threshold=0.0, trade_cost_pct=0.0):
         self.pair = pair
         self.hedge_ratio = float(hedge_ratio)
-        self.capital_per_leg = float(capital_per_leg)
         self.entry_threshold = float(entry_threshold)
         self.exit_threshold = float(exit_threshold)
         self.extreme_z_threshold = float(8)
@@ -22,10 +21,11 @@ class PairsTrade:
         self.entry_date = None
 
         # accounting
-        self.initial_equity = 2.0 * self.capital_per_leg  # max capital allocated to both legs
-        self.deployed_equity = 0.0
+        self.initial_equity = float(initial_equity)  # max capital allocated to both legs
         self.realized_pnl = 0.0
         self.prev_portfolio_value = self.initial_equity  # start value
+        self.current_value = initial_equity
+        self.deployed_equity = 0.0
         self.prev_unreal = 0.0
         self.daily_returns = []    # list of daily pct returns (period-to-period)
         self.equity_values = []    # list of portfolio values for each date
@@ -61,7 +61,7 @@ class PairsTrade:
         current_unreal = self.mark_to_market_unrealized(price_a, price_b)
 
         # 2) current portfolio value = initial + realized (cash) + unrealized
-        current_value = self.initial_equity + self.realized_pnl + current_unreal - self.prev_unreal
+        self.current_value = self.initial_equity + self.realized_pnl + current_unreal - self.prev_unreal
 
         # 3) daily return = pct change vs previous day's portfolio value
         #    (prev_portfolio_value initialized to initial_equity on first day)
@@ -74,13 +74,19 @@ class PairsTrade:
 
         # Append daily return and equity
         self.daily_returns.append(daily_ret)
-        self.equity_values.append(current_value)
+        self.equity_values.append(self.current_value)
         self.equity_dates.append(pd.to_datetime(date))
 
         # Update prev portfolio value for next day's pct change (do this AFTER append)
         # Note: wont change prev_portfolio_value when we realize PnL (because unreal -> realized doesn't change total)
-        self.prev_portfolio_value = current_value
+        self.prev_portfolio_value = self.current_value
         self.prev_unreal = current_unreal
+
+        #Work out capital per leg
+        if self.current_value >= self.initial_equity:
+            capital_per_leg = self.initial_equity/2
+        else: capital_per_leg = self.current_value/2
+
         # --- Now process signals (entry/exit) AFTER MTM accounted for today ---
         # Entry signals ( enter at today's price; effect shows from next day's MTM)
         if self.position == 0:
@@ -92,8 +98,8 @@ class PairsTrade:
                 # correct sizing
                 beta = abs(self.hedge_ratio)
 
-                max_a_by_budget = self.capital_per_leg / price_a
-                max_a_by_b_leg = (self.capital_per_leg / (beta * price_b))
+                max_a_by_budget = capital_per_leg / price_a
+                max_a_by_b_leg = (capital_per_leg / (beta * price_b))
 
                 self.shares_a = min(max_a_by_budget, max_a_by_b_leg)
                 self.shares_b = beta * self.shares_a  # absolute shares, signs handled by position
@@ -110,8 +116,8 @@ class PairsTrade:
                 # correct sizing
                 beta = abs(self.hedge_ratio) if abs(self.hedge_ratio) > 0 else 0.0
 
-                max_a_by_budget = self.capital_per_leg / price_a
-                max_a_by_b_leg = (self.capital_per_leg / (beta * price_b)) if beta > 0 else np.inf
+                max_a_by_budget = capital_per_leg / price_a
+                max_a_by_b_leg = (capital_per_leg / (beta * price_b)) if beta > 0 else np.inf
 
                 self.shares_a = min(max_a_by_budget, max_a_by_b_leg)
                 self.shares_b = beta * self.shares_a  # absolute shares, signs handled by position
@@ -121,10 +127,13 @@ class PairsTrade:
                 self.trades.append((date, "Enter LONG", zscore, price_a, price_b, self.shares_a, self.shares_b))
 
         # Exit signals
-        elif (self.position == 1 and zscore >= -self.exit_threshold or current_unreal < -self.deployed_equity*0.15 or
-              (pd.to_datetime(date)).day - self.entry_date.day > 90 ): #EXIT LONG
+        elif self.position == 1 and (
+            zscore >= -self.exit_threshold
+            or current_unreal < -self.deployed_equity*0.15
+            or (pd.to_datetime(date) - self.entry_date).days > 90 ): #EXIT LONG
+
             # apply exit cost
-            round_trip_trade_costs = self._apply_trade_costs(self.capital_per_leg * 4) # 2 legs, entry and exit
+            round_trip_trade_costs = self._apply_trade_costs(capital_per_leg * 4) # 2 legs, entry and exit
             net_pnl = current_unreal - round_trip_trade_costs
             # realize it
             self.realized_pnl += net_pnl
@@ -135,10 +144,13 @@ class PairsTrade:
             self.entry_price_a = self.entry_price_b = None
             self.shares_a = self.shares_b = self.deployed_equity =  0.0
 
-        elif (self.position == -1 and zscore <= self.exit_threshold or current_unreal < -self.deployed_equity*0.15 or
-            (pd.to_datetime(date)).day - self.entry_date.day > 90): #EXIT SHORT
+        elif self.position == -1 and (
+            zscore <= self.exit_threshold
+            or current_unreal < -self.deployed_equity*0.15
+            or (pd.to_datetime(date) - self.entry_date).days > 90 ): #EXIT SHORT
+
             #apply exit cost
-            round_trip_trade_costs = self._apply_trade_costs(self.capital_per_leg * 4)  # 2 legs, entry and exit
+            round_trip_trade_costs = self._apply_trade_costs(capital_per_leg * 4)  # 2 legs, entry and exit
             net_pnl = current_unreal - round_trip_trade_costs
             #realize it
             self.realized_pnl += net_pnl
@@ -173,7 +185,7 @@ def backtest_pairs(zscore_dict, data, hedge_ratios, capital_per_leg=10000,
     """
     results = []
     for pair, zseries in zscore_dict.items():
-        trader = PairsTrade(pair, hedge_ratios[pair], capital_per_leg,
+        trader = PairsTrade(pair, hedge_ratios[pair], initial_equity=20000,
                             entry_threshold=entry, exit_threshold=exit, trade_cost_pct=trade_cost_pct)
         # iterate dates in zseries (chronological)
         for date in zseries.index:

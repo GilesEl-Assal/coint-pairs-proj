@@ -31,11 +31,17 @@ pd.set_option("display.max_columns", None)
 # === CONFIGURATION ===
 
 current_day = update_day()
-start_date = "2019-08-17"
+start_date = "2021-08-17"
 end_date = str(current_day)
 
+initial_equity = 20000 #Pick arbitrarily
+
 ticker_list = [
-                "LLY", "JNJ", "ABBV", "UNH", "ABT", "MRK", "TMO", "ISRG", "AMGN", "BSX"
+                #Retail and Consumer Staples
+                "WMT", "TGT", "HD", "LOW", "COST", "BJ", "KO", "PEP", "PG", "CL", "MDLZ", "KHC","KO","PEP"
+                #Utilities
+                #"DUK", "D", "NEE", "SO", "AEP", "EXC", "ED", "PEG", "XEL", "CMS"
+
                 ]
 
 # === STEP 1: Data Download ===
@@ -100,7 +106,7 @@ for pair in flipped_ratios_train.keys():
             for exit in exit_values:
                 # Backtest one pair at a time
                 results = backtest_pairs({pair: zscore_pair}, data_pair, {pair: flipped_ratios_train[pair]},
-                                    capital_per_leg=10000, entry=entry, exit=exit,trade_cost_pct=0.005)
+                                    initial_equity, entry=entry, exit=exit,trade_cost_pct=0.005)
                 daily_returns = results[0]['daily_returns']
 
                 #mean_ret = np.mean(daily_returns)
@@ -137,7 +143,7 @@ for pair, (best_lookback, best_entry, best_exit) in best_params.items():
     zscore_pair = zscore_test[pair]
     data_pair = test_data[[pair[0], pair[1]]]
     results = backtest_pairs({pair: zscore_pair}, data_pair, {pair: flipped_ratios_train[pair]},
-                             capital_per_leg=10000, entry=best_entry, exit=best_exit,trade_cost_pct=0.005)
+                             initial_equity, entry=best_entry, exit=best_exit,trade_cost_pct=0.005)
     daily_returns = results[0]['daily_returns']
     mean_ret = np.mean(daily_returns)
     std_ret = np.std(daily_returns, ddof=1)
@@ -185,7 +191,7 @@ for pair, (best_lookback, best_entry, best_exit) in best_params.items():
     zscore_pair = zscore_test[pair]
     data_pair = test_data[[pair[0], pair[1]]]
     results = backtest_pairs({pair: zscore_pair}, data_pair, {pair: flipped_ratios_train[pair]},
-                             capital_per_leg=10000, entry=best_entry, exit=best_exit,trade_cost_pct=0.0005)
+                             initial_equity, entry=best_entry, exit=best_exit,trade_cost_pct=0.0005)
 
     print(f"Trades for pair {pair}:")
     for trade in results[0]["trades"]:
